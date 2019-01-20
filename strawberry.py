@@ -3,6 +3,74 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
 from tkinter import messagebox
+import datetime
+import requests
+import urllib
+import pandas as pd
+import json
+
+# 函数: 承运公司名到文本
+def GetComName(comCode):
+        if comCode=='shentong':
+            return '申通快递'
+        elif comCode=='zhongtong':
+            return '中通快递'
+        elif comCode=='ems':
+            return 'EMS'
+        elif comCode=='huitongkuaidi':
+            return '汇通快运'
+        else:
+            return comCode
+
+# 函数: 取状态文本
+def GetStateText(num):
+        if num==0:
+            return '运输中'
+        elif num==1:
+            return '揽件'
+        elif num==2:
+            return '疑难'
+        elif num==3:
+            return '已签收'
+        elif num==4:
+            return '退回签收'
+        elif num==5:
+            return '派送中'
+        elif num==6:
+            return '退回中'
+def dataframe2str(datalist):
+        datatable=""
+        for this in datalist:
+            datatable += this['time'] + "\t" + this['context'] + "\n"
+        return datatable
+    
+def k100_find_order(company, id):
+        if id.strip() == '':
+                print("订单输入为空")
+                return None
+        print("[",id.strip(),"]",company)
+        data = {}
+        data['type'] = company
+        data['postid'] = id
+        data['valicode']=''
+        data['id']=1
+        data['temp']='0.14881871496191512'
+        query = requests.get("http://www.kuaidi100.com/query", params=data)
+        res = query.json()
+        print("\n运单编号 --> " + "!"+res['nu']+"!")
+        print("\n承运公司 --> " + GetComName(res['com']))
+        print("\n当前状态 --> " + GetStateText(int(res['state'])))
+        print("\n---------------- 跟踪信息 ------------------\n")
+        if res['nu'] == '':
+                mesg = "订单"+ id + "没有查到此单"
+                print(mesg)
+                return None
+        #print(dataframe2str(res['data']))
+        #for this in res['data']:
+           # print(this['time'] + "\t" + this['context'] + "\n")
+        return res
+
+
 
 
 class Application(tk.Tk):
@@ -14,9 +82,20 @@ class Application(tk.Tk):
     def __init__(self):
         '''初始化'''
         super().__init__() # 有点相当于tk.Tk()
-        
         self.createWidgets()
-
+        
+    def searchcallback(self):
+        order_var = self.textbox.get("0.0", "end")
+        #messagebox.showinfo( "查询结果", order_var)
+        i = 0 
+        for myvar in order_var.split('\n'):
+                i +=1
+                print(i)
+                myorder = k100_find_order('zhongtong',myvar)
+                if myorder:
+                        self.treeview.insert('', 1, values=(myorder['nu'], GetComName(myorder['com']),GetStateText(int(myorder['state'])),dataframe2str(myorder['data'])))
+                
+        
     def createWidgets(self):
         '''界面'''
         self.title('快递订单查询工具')
@@ -25,8 +104,8 @@ class Application(tk.Tk):
         # 定义一些变量
         self.entryvar = tk.StringVar()
         self.keyvar = tk.StringVar()
-        self.keyvar.set('关键字')
-        items = ['BufferPool','Close','Data Capture','Compress','Pqty','Sqty']
+        self.keyvar.set('订单状态过滤')
+        items = ['运输中','揽件','疑难','已签收','退回签收','派送中','退回中']
 
         # 先定义顶部和左边栏，内容三个Frame，用来放置下面的部件
         topframe = tk.Frame(self, height=80)
@@ -55,9 +134,12 @@ class Application(tk.Tk):
         # -- 前两个滚动条一个竖直一个水平
         self.oderLabel = tk.Label(leftframe, text='订单列表',width=20)
         self.textbox = tk.Text(leftframe,width=20)
+        self.searchbutton=tk.Button(leftframe,text='查询',command= self.searchcallback )
+        
         # -- 放置位置
         self.oderLabel.grid(row=0,column=0,sticky=tk.N)
         self.textbox.grid(row=1, column=0, sticky=tk.NS)
+        self.searchbutton.grid(row=2,sticky=tk.W+tk.E+tk.S)
                 
         rightbar = tk.Scrollbar(contentframe, orient=tk.VERTICAL)
         bottombar = tk.Scrollbar(contentframe, orient=tk.HORIZONTAL)
@@ -69,19 +151,23 @@ class Application(tk.Tk):
         self.treeview.column('d', width=20, anchor='center')
         self.treeview.heading('0', text='#')
         self.treeview.heading('a', text='订单单号')
-        self.treeview.heading('b', text='发货时间')
-        self.treeview.heading('c', text='发货状态')
-        self.treeview.heading('d', text='发货地')
+        self.treeview.heading('b', text='承运公司')
+        self.treeview.heading('c', text='运单状态')
+        self.treeview.heading('d', text='跟踪信息')
 
         # -- 放置位置
         rightbar.pack(side =tk.RIGHT, fill=tk.Y)
         bottombar.pack(side=tk.BOTTOM, fill=tk.X)
 
+        #mydata = k100_find_order('zhongtong',75124545932031)
+        #self.treeview.insert('', 1, values=(mydata['nu'], GetComName(mydata['com']),GetStateText(int(mydata['state'])),dataframe2str(mydata['data'])))
         self.treeview.pack(side=tk.LEFT,fill=tk.BOTH,expand=1)
+
         # -- 设置命令
         rightbar.config(command=self.textbox.yview)
         bottombar.config(command=self.textbox.xview)
         
+
         
     def __opendir(self):
         '''打开文件夹的逻辑'''
